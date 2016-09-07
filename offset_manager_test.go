@@ -367,3 +367,48 @@ func TestAbortPartitionOffsetManager(t *testing.T) {
 	broker.Close()
 	safeClose(t, testClient)
 }
+
+func TestPartitionOffsetManagerResetOffset(t *testing.T) {
+	om, testClient, broker, coordinator := initOffsetManager(t)
+	pom := initPartitionOffsetManager(t, om, coordinator, 5, "original_meta")
+
+	ocResponse := new(OffsetCommitResponse)
+	ocResponse.AddError("my_topic", 0, ErrNoError)
+	coordinator.Returns(ocResponse)
+
+	pom.MarkOffset(100, "modified_meta")
+	offset, meta := pom.NextOffset()
+
+	if offset != 100 {
+		t.Errorf("Expected offset 100. Actual: %v", offset)
+	}
+	if meta != "modified_meta" {
+		t.Errorf("Expected metadata \"modified_meta\". Actual: %q", meta)
+	}
+
+	pom.ResetOffset()
+	offset, meta = pom.NextOffset()
+
+	if offset != 1 {
+		t.Errorf("Expected offset 50. Actual: %v", offset)
+	}
+	if meta != "" {
+		t.Errorf("Expected empty metadata. Actual: %q", meta)
+	}
+
+	pom.MarkOffset(50, "modified_meta_again")
+	offset, meta = pom.NextOffset()
+
+	if offset != 50 {
+		t.Errorf("Expected offset 50. Actual: %v", offset)
+	}
+	if meta != "modified_meta_again" {
+		t.Errorf("Expected metadata \"modified_meta_again\". Actual: %q", meta)
+	}
+
+	safeClose(t, pom)
+	safeClose(t, om)
+	safeClose(t, testClient)
+	broker.Close()
+	coordinator.Close()
+}

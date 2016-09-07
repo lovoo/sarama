@@ -151,6 +151,15 @@ type PartitionOffsetManager interface {
 	// message twice, and your processing should ideally be idempotent.
 	MarkOffset(offset int64, metadata string)
 
+	// ResetOffset resets the offset and the metadata string.
+	//
+	//
+	// Note: calling ResetOffset does not necessarily commit the offset to the backend
+	// store immediately for efficiency reasons, and it may never be committed if
+	// your application crashes. This means that you may end up processing the same
+	// message twice, and your processing should ideally be idempotent.
+	ResetOffset()
+
 	// Errors returns a read channel of errors that occur during offset management, if
 	// enabled. By default, errors are logged and not returned over this channel. If
 	// you want to implement any custom error handling, set your config's
@@ -327,6 +336,15 @@ func (pom *partitionOffsetManager) MarkOffset(offset int64, metadata string) {
 		pom.metadata = metadata
 		pom.dirty = true
 	}
+}
+
+func (pom *partitionOffsetManager) ResetOffset() {
+	pom.lock.Lock()
+	defer pom.lock.Unlock()
+
+	pom.offset = 1
+	pom.metadata = ""
+	pom.dirty = true
 }
 
 func (pom *partitionOffsetManager) updateCommitted(offset int64, metadata string) {
